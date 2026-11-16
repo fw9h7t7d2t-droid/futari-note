@@ -97,24 +97,50 @@ textarea{min-height:60px;resize:vertical}
 .legend{display:flex;gap:12px;justify-content:center;font-size:12px;color:var(--sub);margin-top:8px}
 .legend span{display:flex;align-items:center;gap:4px}
 .ro .fab{display:none}
-#login{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#login{position:fixed;inset:0;background:var(--bg);z-index:50;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#login .in{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));text-align:center;box-sizing:border-box}
+#login form,#login .box{width:100%;max-width:320px}
+#login input{margin-bottom:8px}
+#login .link{background:none;border:none;color:var(--sub);font-size:13px;padding:8px;text-decoration:underline;font-family:inherit}
+#login .or{color:var(--sub);font-size:12px;margin:16px 0 10px;width:100%;max-width:320px;display:flex;align-items:center;gap:10px}
+#login .or::before,#login .or::after{content:"";flex:1;height:1px;background:var(--line)}
+#login .box p{margin-bottom:14px}
 #login img{width:84px;height:84px;border-radius:20px;margin-bottom:14px}
 #login h1{font-size:22px;margin:0 0 6px}
 #login p{color:var(--sub);font-size:14px;line-height:1.7;margin:0 0 20px}
-#login .btn{max-width:300px;width:100%}
+#login .btn{flex:none;width:100%;max-width:320px;display:block;margin:0 auto}
 #loginMsg{color:var(--out);font-size:13px;margin-top:14px;min-height:1em;line-height:1.6}
 .hidden{display:none!important}
 </style>
 </head>
 <body class="ro">
-<div id="login">
+<div id="login"><div class="in">
   <img src="icon-192.png" alt="">
   <h1>ふたりノート</h1>
   <p>ふたりの予定と家計簿</p>
-  <button class="btn" id="loginBtn">Googleでログイン</button>
-  <button class="btn ghost hidden" id="logoutBtn2" style="max-width:300px;width:100%;margin-top:10px">別のアカウントでログイン</button>
+
+  <form id="pwForm" class="hidden">
+    <input id="lgEmail" type="email" autocomplete="username" inputmode="email" placeholder="メールアドレス">
+    <input id="lgPass" type="password" autocomplete="current-password" placeholder="パスワード（6文字以上）">
+    <button class="btn" type="submit" id="pwLogin">ログイン</button>
+    <button type="button" class="link" id="signupBtn">はじめての方：アカウントを作る</button><br>
+    <button type="button" class="link" id="resetBtn">パスワードを忘れた</button>
+  </form>
+
+  <div id="googleWrap" class="hidden" style="width:100%;max-width:320px">
+    <div class="or">または</div>
+    <button class="btn ghost" id="loginBtn">Googleでログイン</button>
+  </div>
+
+  <div id="verifyBox" class="box hidden">
+    <p>確認メールを <b id="vEmail"></b> に送りました。<br>メールの中のリンクを押してから、下のボタンを押してください。</p>
+    <button class="btn" id="verifiedBtn">確認しました</button>
+    <button type="button" class="link" id="resendBtn">確認メールをもう一度送る</button>
+  </div>
+
+  <button class="btn ghost hidden" id="logoutBtn2" style="margin-top:10px">別のアカウントでログイン</button>
   <div id="loginMsg"></div>
-</div>
+</div></div>
 
 <header>
   <h1>ふたりノート</h1>
@@ -217,7 +243,7 @@ textarea{min-height:60px;resize:vertical}
 <script type="module">
 import { firebaseConfig, DEFAULT_NAMES } from "./config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const OUT_CATS=["食費","外食","日用品","住居","光熱費","通信","交通","車","娯楽","医療","衣服","交際","サッカー","その他"];
@@ -491,40 +517,107 @@ function stopAll(){unsubMonth.forEach(u=>u());unsubFixed.forEach(u=>u());unsubMo
 function denied(){
   stopAll();setWritable(false);
   $("login").classList.remove("hidden");
-  $("loginMsg").textContent=(me&&me.email?me.email+" は":"このアカウントは")+"ふたりノートに登録されていません。登録したGoogleアカウントでログインしてください。";
-  $("loginBtn").classList.add("hidden");$("logoutBtn2").classList.remove("hidden");
+  lmsg((me&&me.email?me.email+" は":"このアカウントは")+"ふたりノートに登録されていません。登録したメールアドレスでログインしてください。");
+  $("pwForm").classList.add("hidden");$("googleWrap").classList.add("hidden");$("verifyBox").classList.add("hidden");$("logoutBtn2").classList.remove("hidden");
 }
 
 /* ---------- auth ---------- */
+const standalone=(navigator.standalone===true)||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);
+function lmsg(t,ok){const m=$("loginMsg");m.style.color=ok?"var(--in)":"";m.textContent=t||""}
+function authErr(e){
+  const c=e&&e.code||"";
+  return ({
+    "auth/invalid-credential":"メールアドレスかパスワードが違います",
+    "auth/wrong-password":"メールアドレスかパスワードが違います",
+    "auth/user-not-found":"このメールアドレスのアカウントはまだありません。「アカウントを作る」から登録してください",
+    "auth/invalid-email":"メールアドレスの形が正しくありません",
+    "auth/missing-password":"パスワードを入れてください",
+    "auth/weak-password":"パスワードは6文字以上にしてください",
+    "auth/email-already-in-use":"このメールアドレスはもう登録されています。ログインしてください（パスワードがわからなければ「パスワードを忘れた」から設定できます）",
+    "auth/too-many-requests":"何度も失敗したので少し待ってからお試しください",
+    "auth/network-request-failed":"通信できませんでした。電波の良い場所でお試しください",
+    "auth/operation-not-allowed":"Firebaseで「メール/パスワード」のログインがまだ有効になっていません",
+  })[c]||("ログインできませんでした（"+(c||"エラー")+"）");
+}
+function showLoginForm(){
+  $("login").classList.remove("hidden");
+  $("pwForm").classList.remove("hidden");
+  $("googleWrap").classList.toggle("hidden",standalone);
+  $("verifyBox").classList.add("hidden");
+  $("logoutBtn2").classList.add("hidden");
+}
+function showVerify(u){
+  $("login").classList.remove("hidden");
+  $("pwForm").classList.add("hidden");$("googleWrap").classList.add("hidden");
+  $("verifyBox").classList.remove("hidden");$("logoutBtn2").classList.remove("hidden");
+  $("vEmail").textContent=u.email||"";
+}
+const vSettings=()=>({url:location.origin+location.pathname});
 async function login(){
-  $("loginMsg").textContent="";
+  lmsg("");
   const p=new GoogleAuthProvider();p.setCustomParameters({prompt:"select_account"});
   try{await signInWithPopup(auth,p)}
   catch(e){
     if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment")){await signInWithRedirect(auth,p);return}
-    if(e&&e.code==="auth/popup-closed-by-user")return;
-    $("loginMsg").textContent="ログインできませんでした（"+(e&&e.code||"エラー")+"）";
+    if(e&&(e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request"))return;
+    lmsg(authErr(e));
   }
 }
 $("loginBtn").onclick=login;
+$("pwForm").onsubmit=async ev=>{
+  ev.preventDefault();lmsg("");
+  const em=$("lgEmail").value.trim(), pw=$("lgPass").value;
+  const b=$("pwLogin");b.disabled=true;
+  try{await signInWithEmailAndPassword(auth,em,pw)}catch(e){lmsg(authErr(e))}finally{b.disabled=false}
+};
+$("signupBtn").onclick=async()=>{
+  lmsg("");
+  const em=$("lgEmail").value.trim(), pw=$("lgPass").value;
+  if(!em||!pw){lmsg("メールアドレスと、決めたいパスワード（6文字以上）を入れてから押してください");return}
+  try{
+    const c=await createUserWithEmailAndPassword(auth,em,pw);
+    try{await sendEmailVerification(c.user,vSettings())}catch(e){await sendEmailVerification(c.user)}
+  }catch(e){lmsg(authErr(e))}
+};
+$("resetBtn").onclick=async()=>{
+  const em=$("lgEmail").value.trim();
+  if(!em){lmsg("メールアドレスを入れてから押してください");return}
+  try{await sendPasswordResetEmail(auth,em);lmsg(em+" にパスワード設定用のメールを送りました（届かなければ迷惑メールも確認してください）",true)}
+  catch(e){lmsg(authErr(e))}
+};
+$("verifiedBtn").onclick=async()=>{
+  const u=auth.currentUser;if(!u)return;
+  try{await u.reload();
+    if(auth.currentUser.emailVerified){await auth.currentUser.getIdToken(true);lmsg("");enterApp(auth.currentUser)}
+    else lmsg("まだ確認が済んでいないようです。メールのリンクを押してから、もう一度お試しください")}
+  catch(e){lmsg(authErr(e))}
+};
+$("resendBtn").onclick=async()=>{
+  const u=auth.currentUser;if(!u)return;
+  try{await sendEmailVerification(u,vSettings()).catch(()=>sendEmailVerification(u));lmsg("確認メールを送りました（届かなければ迷惑メールも確認してください）",true)}
+  catch(e){lmsg(authErr(e))}
+};
 $("logoutBtn").onclick=()=>signOut(auth);
-$("logoutBtn2").onclick=async()=>{await signOut(auth);login()};
+$("logoutBtn2").onclick=async()=>{await signOut(auth);lmsg("")};
+function enterApp(u){
+  $("login").classList.add("hidden");
+  $("meEmail").textContent=u.email||"";
+  subscribeFixed();subscribeMonth();render();
+}
 
 // 日付が変わったら「今日」を更新
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){const t=ymd(new Date());if(t!==todayStr){todayStr=t;if(me){subscribeFixed()}render()}}});
 
 render();
 if(!configured){
-  $("loginBtn").classList.add("hidden");
-  $("loginMsg").textContent="config.js にFirebaseの設定がまだ入っていません。README の手順で設定してください。";
+  lmsg("config.js にFirebaseの設定がまだ入っていません。README の手順で設定してください。");
 }else{
-  getRedirectResult(auth).catch(e=>{$("loginMsg").textContent="ログインできませんでした（"+(e&&e.code||"エラー")+"）"});
+  getRedirectResult(auth).catch(e=>lmsg(authErr(e)));
   onAuthStateChanged(auth,u=>{
     me=u;
-    if(!u){stopAll();setWritable(false);$("login").classList.remove("hidden");$("loginBtn").classList.remove("hidden");$("logoutBtn2").classList.add("hidden");render();return}
-    $("login").classList.add("hidden");
-    $("meEmail").textContent=u.email||"";
-    subscribeFixed();subscribeMonth();render();
+    if(!u){stopAll();setWritable(false);showLoginForm();render();return}
+    if(!u.emailVerified){stopAll();setWritable(false);showVerify(u);return}
+    enterApp(u);
   });
 }
 </script>
