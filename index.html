@@ -729,6 +729,19 @@ function enterApp(u){
   subscribeFixed();subscribeMonth();render();
 }
 
+// 新しい版が公開されていたら自動で読み込み直す（スマホのキャッシュ対策）
+const APP_VERSION="2026111602";
+async function checkUpdate(){
+  try{
+    const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});
+    if(!r.ok)return;
+    const v=(await r.json()).version;
+    if(v&&v!==APP_VERSION&&!$("sheet").classList.contains("on")){location.replace(location.pathname+"?v="+encodeURIComponent(v))}
+  }catch(e){}
+}
+checkUpdate();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
+
 // 日付が変わったら「今日」を更新
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){const t=ymd(new Date());if(t!==todayStr){todayStr=t;if(me){subscribeFixed()}render()}}});
 
