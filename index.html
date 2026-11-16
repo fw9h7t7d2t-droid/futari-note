@@ -243,8 +243,20 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-wi
     <div class="seg" id="mWho"></div>
     <label>メモ</label><input id="mMemo" maxlength="100" placeholder="例: スーパー">
   </div>
+  <div id="repWrap">
+    <label>繰り返し</label>
+    <div class="row">
+      <div><select id="repType"><option value="">しない</option><option value="w">毎週</option><option value="m">毎月</option><option value="y">毎年</option></select></div>
+      <div id="repCountWrap" style="display:none"><select id="repCount"></select></div>
+    </div>
+  </div>
+  <div id="scopeWrap" style="display:none">
+    <label id="scopeLabel">変更する範囲</label>
+    <div class="seg" id="scopeSeg"></div>
+  </div>
   <div class="actions">
     <button class="btn danger" id="shDel" style="display:none">削除</button>
+    <button class="btn ghost" id="shDup" style="display:none;flex:0 0 auto;padding:13px 16px">複製</button>
     <button class="btn" id="shSave">保存</button>
   </div>
   <div class="err" id="shErr"></div>
@@ -254,7 +266,7 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-wi
 import { firebaseConfig, DEFAULT_NAMES } from "./config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, getDocs, writeBatch, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const OUT_CATS=["食費","外食","日用品","住居","光熱費","通信","交通","車","娯楽","医療","衣服","交際","サッカー","その他"];
 const IN_CATS=["給料","副業","臨時","その他"];
@@ -331,7 +343,7 @@ function eventItem(e,showDate){
   let when;
   if(ed>e.date){ when=fmtDate(e.date)+(e.time?" "+e.time:"")+" 〜 "+fmtDate(ed)+(e.end?" "+e.end:""); }
   else{ when=(showDate?fmtDate(e.date)+"  ":"")+(e.time?(e.time+(e.end?"〜"+e.end:"")):"終日"); }
-  sm.textContent=[when, e.memo||""].filter(Boolean).join("  ");
+  sm.textContent=[when, e.seriesType?"🔁"+REP_NAME[e.seriesType]:"", e.memo||""].filter(Boolean).join("  ");
   t.append(b,sm);
   const tag=document.createElement("span");tag.className="tag";tag.style.background=colorOf(e.who);tag.textContent=nameOf(e.who);
   it.append(bar,t,tag);
@@ -343,12 +355,24 @@ function moneyItem(x,showDate){
   const bar=document.createElement("div");bar.className="bar";bar.style.background=x.kind==="in"?"var(--in)":"var(--out)";
   const t=document.createElement("div");t.className="t";
   const b=document.createElement("b");b.textContent=x.category+(x.memo?"・"+x.memo:"");
-  const sm=document.createElement("small");sm.textContent=(showDate?fmtDate(x.date)+"  ":"")+(x.who==="both"?"共通口座":nameOf(x.who))+(x.kind==="in"?"の収入":"が支払い");
+  const sm=document.createElement("small");sm.textContent=(showDate?fmtDate(x.date)+"  ":"")+(x.who==="both"?"共通口座":nameOf(x.who))+(x.kind==="in"?"の収入":"が支払い")+(x.seriesType?"  🔁"+REP_NAME[x.seriesType]:"");
   t.append(b,sm);
   const a=document.createElement("span");a.className="amt "+(x.kind==="in"?"in":"out");a.textContent=(x.kind==="in"?"+":"−")+yen(x.amount);
   it.append(bar,t,a);
   it.onclick=()=>openSheet(x.kind,x);
   return it;
+}
+const REP_NAME={w:"毎週",m:"毎月",y:"毎年"};
+const REP_COUNTS={w:[[4,"4回（約1ヶ月）"],[8,"8回（約2ヶ月）"],[12,"12回（約3ヶ月）"],[26,"26回（約半年）"],[52,"52回（約1年）"]],m:[[3,"3回（3ヶ月）"],[6,"6回（半年）"],[12,"12回（1年）"],[24,"24回（2年）"],[36,"36回（3年）"]],y:[[2,"2回"],[3,"3回"],[5,"5回"],[10,"10回"]]};
+const REP_DEFAULT={w:12,m:12,y:5};
+function addDays(str,n){const d=new Date(str+"T00:00:00");d.setDate(d.getDate()+n);return ymd(d)}
+function daysBetween(a,b){return Math.round((Date.parse(b+"T00:00:00")-Date.parse(a+"T00:00:00"))/864e5)}
+function occDate(str,type,i){
+  if(type==="w")return addDays(str,7*i);
+  const y=+str.slice(0,4),m=+str.slice(5,7)-1,d=+str.slice(8,10);
+  const ty=type==="y"?y+i:y, tm=type==="m"?m+i:m;
+  const last=new Date(ty,tm+1,0).getDate();
+  return ymd(new Date(ty,tm,Math.min(d,last)));
 }
 function endOf(e){return e.endDate&&e.endDate>=e.date?e.endDate:e.date}
 function covers(e,d){return e.date<=d&&endOf(e)>=d}
@@ -455,6 +479,7 @@ function openSheet(k,item){
   if(!item){$("eTitle").value="";$("eTime").value="";$("eEnd").value="";$("eMemo").value="";$("mAmount").value="";$("mMemo").value=""}
   drawKind();
   const del=$("shDel");del.style.display=item?"":"none";del.textContent="削除";del.classList.remove("arm");
+  drawRepeatUI();
   $("mask").style.display="block";requestAnimationFrame(()=>$("sheet").classList.add("on"));
 }
 function closeSheet(){$("sheet").classList.remove("on");setTimeout(()=>{$("mask").style.display="none"},200)}
@@ -474,7 +499,35 @@ function fireWrite(p,errBox){p.catch(e=>{notice(errText(e))})}
 function drawAllDay(){const on=$("eAllDay").checked;document.querySelectorAll("#fEvent .tm").forEach(x=>x.style.display=on?"none":"")}
 $("eAllDay").onchange=drawAllDay;
 $("eDate").addEventListener("change",()=>{const a=$("eDate").value,b=$("eEndDate").value;if(a&&(!b||b<a))$("eEndDate").value=a});
-$("shSave").onclick=()=>{
+let scope="one";
+function drawRepCount(){
+  const t=$("repType").value;$("repCountWrap").style.display=t?"":"none";
+  if(!t)return;const sel=$("repCount");sel.innerHTML="";
+  REP_COUNTS[t].forEach(([n,l])=>{const o=document.createElement("option");o.value=n;o.textContent=l;if(n===REP_DEFAULT[t])o.selected=true;sel.appendChild(o)});
+}
+$("repType").onchange=drawRepCount;
+function drawRepeatUI(){
+  $("repWrap").style.display=editing?"none":"";
+  if(!editing){$("repType").value="";drawRepCount()}
+  const series=!!(editing&&editing.seriesId);
+  $("scopeWrap").style.display=series?"":"none";
+  scope="one";
+  if(series)segButtons($("scopeSeg"),[["one","この回だけ"],["after","これ以降すべて"]],scope,v=>scope=v);
+  $("shDup").style.display=editing?"":"none";
+}
+$("shDup").onclick=()=>{
+  // 今の入力内容のまま「新規追加」に切り替える
+  editing=null;delArmed=false;
+  $("shTitle").textContent="複製（日付を変えて保存）";
+  $("shDel").style.display="none";
+  drawRepeatUI();
+  $("shErr").textContent="";
+};
+async function seriesAfter(name,item){
+  const snap=await getDocs(query(col(name),where("seriesId","==",item.seriesId)));
+  return snap.docs.filter(d=>(d.data().date||"")>=item.date);
+}
+$("shSave").onclick=async()=>{
   let name,data;
   if(kind==="event"){
     const title=$("eTitle").value.trim(), date=$("eDate").value;
@@ -496,15 +549,54 @@ $("shSave").onclick=()=>{
   data.updatedAt=Date.now();
   data.createdAt=editing&&editing.createdAt?editing.createdAt:Date.now();
   data.by=me?me.uid:"";
-  const ref=editing?doc(fs,name,editing.id):doc(col(name));
-  fireWrite(setDoc(ref,data));
+  const span=name==="events"?daysBetween(data.date,data.endDate):0;
+  if(!editing){
+    const type=$("repType").value, n=type?Math.min(60,+$("repCount").value||1):1;
+    if(!type){ fireWrite(setDoc(doc(col(name)),data)); }
+    else{
+      const sid="s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      const b=writeBatch(fs);
+      for(let i=0;i<n;i++){
+        const d=occDate(data.date,type,i);
+        const row=Object.assign({},data,{date:d,seriesId:sid,seriesType:type});
+        if(name==="events")row.endDate=addDays(d,span);
+        b.set(doc(col(name)),row);
+      }
+      fireWrite(b.commit());
+    }
+  }else if(editing.seriesId&&scope==="after"){
+    const btn=$("shSave");btn.disabled=true;
+    try{
+      const docs=await seriesAfter(name,editing);
+      const delta=daysBetween(editing.date,data.date);
+      const b=writeBatch(fs);
+      docs.forEach(d=>{
+        const old=d.data(), nd=addDays(old.date,delta);
+        const row=Object.assign({},data,{date:nd,seriesId:editing.seriesId,seriesType:editing.seriesType||"",createdAt:old.createdAt||data.createdAt});
+        if(name==="events")row.endDate=addDays(nd,span);
+        b.set(d.ref,row);
+      });
+      fireWrite(b.commit());
+    }catch(e){$("shErr").textContent="まとめて変更できませんでした。電波の良い場所でお試しください";return}
+    finally{btn.disabled=false}
+  }else{
+    if(editing.seriesId){data.seriesId=editing.seriesId;data.seriesType=editing.seriesType||""}
+    fireWrite(setDoc(doc(fs,name,editing.id),data));
+  }
   if(data.date.slice(0,7)!==ymd(S.month).slice(0,7)){S.month=new Date(+data.date.slice(0,4),+data.date.slice(5,7)-1,1);subscribeMonth()}
   S.sel=data.date; closeSheet(); render();
 };
-$("shDel").onclick=()=>{
+$("shDel").onclick=async()=>{
   const b=$("shDel");
   if(!delArmed){delArmed=true;b.textContent="本当に削除";b.classList.add("arm");return}
-  fireWrite(deleteDoc(doc(fs,kind==="event"?"events":"money",editing.id)));closeSheet();
+  const name=kind==="event"?"events":"money";
+  if(editing.seriesId&&scope==="after"){
+    b.disabled=true;
+    try{const docs=await seriesAfter(name,editing);const wb=writeBatch(fs);docs.forEach(d=>wb.delete(d.ref));fireWrite(wb.commit())}
+    catch(e){$("shErr").textContent="まとめて削除できませんでした。電波の良い場所でお試しください";b.disabled=false;return}
+    b.disabled=false;
+  }else fireWrite(deleteDoc(doc(fs,name,editing.id)));
+  closeSheet();
 };
 
 /* ---------- settings ---------- */
