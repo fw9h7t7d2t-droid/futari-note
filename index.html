@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ふたりノート</title>
+<meta name="theme-color" content="#f7f5f2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ふたりノート">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --bg:#f7f5f2; --card:#fff; --ink:#2b2a28; --sub:#8a857e; --line:#e8e3dc;
+  --a:#3b7dd8; --b:#e0648a; --both:#8a63d2; --in:#2f9e6e; --out:#d9534f; --accent:#2b2a28;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(76px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
+header h1{font-size:18px;margin:0;letter-spacing:.04em}
+.mnav{display:flex;align-items:center;gap:6px}
+.mnav button{border:none;background:var(--card);width:34px;height:34px;border-radius:50%;font-size:16px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.mnav span{font-weight:700;min-width:96px;text-align:center}
+.notice{margin:6px 16px;padding:8px 12px;border-radius:10px;background:#fff5e0;color:#8a5a00;font-size:13px;display:none}
+.card{background:var(--card);margin:10px 12px;border-radius:16px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.view{display:none}.view.on{display:block}
+/* calendar */
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dow{font-size:11px;color:var(--sub);text-align:center;padding:4px 0}
+.dow:first-child{color:var(--out)}.dow:last-child{color:var(--a)}
+.day{min-height:52px;border-radius:10px;padding:4px 2px;text-align:center;cursor:pointer;position:relative}
+.day .n{font-size:13px;width:24px;height:24px;line-height:24px;border-radius:50%;margin:0 auto}
+.day.other{opacity:.3}
+.day.today .n{background:var(--accent);color:#fff}
+.day.sel{background:#f1ede7}
+.day .dots{display:flex;justify-content:center;gap:2px;margin-top:3px;flex-wrap:wrap}
+.dot{width:6px;height:6px;border-radius:50%}
+.day .yen{font-size:9px;color:var(--out);margin-top:2px}
+.sun .n{color:var(--out)}.sat .n{color:var(--a)}
+.day.today .n{color:#fff}
+h2{font-size:14px;margin:4px 4px 8px;color:var(--sub);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.item{display:flex;align-items:center;gap:10px;padding:10px 4px;border-top:1px solid var(--line);cursor:pointer}
+.item:first-of-type{border-top:none}
+.bar{width:4px;align-self:stretch;border-radius:4px}
+.item .t{flex:1;min-width:0}
+.item .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .t small{color:var(--sub);font-size:12px}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;color:#fff;white-space:nowrap}
+.amt{font-weight:700;white-space:nowrap}
+.amt.out{color:var(--out)}.amt.in{color:var(--in)}
+.empty{color:var(--sub);font-size:13px;text-align:center;padding:14px 0}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:20px;padding:5px 12px;font-size:13px}
+/* summary */
+.sum{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+.sum div small{display:block;color:var(--sub);font-size:11px}
+.sum div b{font-size:17px}
+.prog{height:8px;background:#eee;border-radius:8px;overflow:hidden;margin-top:10px}
+.prog i{display:block;height:100%;background:var(--in);border-radius:8px}
+.brow{display:flex;align-items:center;gap:8px;margin:7px 4px;font-size:13px}
+.brow .l{width:64px;flex:none}
+.brow .track{flex:1;height:10px;background:#f0ece6;border-radius:6px;overflow:hidden}
+.brow .track i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.brow .v{width:78px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+/* tabs */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.tabs button{flex:1;border:none;background:none;padding:10px 0 8px;font-size:11px;color:var(--sub)}
+nav.tabs button .i{display:block;font-size:20px;margin-bottom:2px}
+nav.tabs button.on{color:var(--ink);font-weight:700}
+.fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:28px;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:6}
+/* sheet */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:10}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .22s;z-index:11;max-height:90vh;overflow:auto}
+.sheet.on{transform:none}
+.sheet h3{margin:0 0 12px;font-size:17px;display:flex;justify-content:space-between}
+.sheet h3 button{border:none;background:none;font-size:20px;color:var(--sub)}
+.seg{display:flex;background:#f1ede7;border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;border:none;background:none;padding:8px 0;border-radius:10px;font-size:14px;color:var(--sub)}
+.seg button.on{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+label{display:block;font-size:12px;color:var(--sub);margin:10px 2px 4px}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:60px;resize:vertical}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.amount{font-size:26px;font-weight:700;text-align:right}
+.cats{display:flex;flex-wrap:wrap;gap:6px}
+.cats button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13px}
+.cats button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.actions{display:flex;gap:8px;margin-top:16px}
+.btn{flex:1;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;background:var(--accent);color:#fff}
+.btn.ghost{background:#f1ede7;color:var(--ink)}
+.btn.danger{background:#fdecea;color:var(--out);flex:0 0 auto;padding:13px 16px}
+.btn.danger.arm{background:var(--out);color:#fff}
+.btn:disabled{opacity:.5}
+.err{color:var(--out);font-size:13px;margin-top:8px;min-height:1em}
+.legend{display:flex;gap:12px;justify-content:center;font-size:12px;color:var(--sub);margin-top:8px}
+.legend span{display:flex;align-items:center;gap:4px}
+.ro .fab{display:none}
+#login{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#login img{width:84px;height:84px;border-radius:20px;margin-bottom:14px}
+#login h1{font-size:22px;margin:0 0 6px}
+#login p{color:var(--sub);font-size:14px;line-height:1.7;margin:0 0 20px}
+#login .btn{max-width:300px;width:100%}
+#loginMsg{color:var(--out);font-size:13px;margin-top:14px;min-height:1em;line-height:1.6}
+.hidden{display:none!important}
+</style>
+</head>
+<body class="ro">
+<div id="login">
+  <img src="icon-192.png" alt="">
+  <h1>ふたりノート</h1>
+  <p>ふたりの予定と家計簿</p>
+  <button class="btn" id="loginBtn">Googleでログイン</button>
+  <button class="btn ghost hidden" id="logoutBtn2" style="max-width:300px;width:100%;margin-top:10px">別のアカウントでログイン</button>
+  <div id="loginMsg"></div>
+</div>
+
+<header>
+  <h1>ふたりノート</h1>
+  <div class="mnav"><button id="prev" aria-label="前の月">‹</button><span id="mlabel"></span><button id="next" aria-label="次の月">›</button></div>
+</header>
+<div class="notice" id="notice"></div>
+
+<section class="view on" id="v-cal">
+  <div class="card">
+    <div class="grid" id="grid"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="card">
+    <h2><span id="dayTitle"></span><button class="chip" id="addHere">＋ この日に追加</button></h2>
+    <div id="dayList"></div>
+  </div>
+  <div class="card">
+    <h2>これからの予定</h2>
+    <div id="upcoming"></div>
+  </div>
+</section>
+
+<section class="view" id="v-money">
+  <div class="card">
+    <div class="sum">
+      <div><small>支出</small><b id="sOut" style="color:var(--out)">¥0</b></div>
+      <div><small>収入</small><b id="sIn" style="color:var(--in)">¥0</b></div>
+      <div><small>収支</small><b id="sBal">¥0</b></div>
+    </div>
+    <div id="budgetBox"></div>
+  </div>
+  <div class="card"><h2>カテゴリ別の支出</h2><div id="cats"></div></div>
+  <div class="card"><h2>だれが払った？</h2><div id="payers"></div></div>
+  <div class="card"><h2>今月の明細</h2><div id="mList"></div></div>
+</section>
+
+<section class="view" id="v-set">
+  <div class="card">
+    <h2>ふたりの名前</h2>
+    <div class="row">
+      <div><label>ひとり目</label><input id="setA" maxlength="12"></div>
+      <div><label>ふたり目</label><input id="setB" maxlength="12"></div>
+    </div>
+    <label>月の予算（支出の上限・円）</label>
+    <input id="setBudget" type="number" inputmode="numeric" min="0" placeholder="例: 250000">
+    <div class="actions"><button class="btn" id="saveSet">保存</button></div>
+    <div class="err" id="setErr"></div>
+  </div>
+  <div class="card">
+    <h2>アカウント</h2>
+    <div id="meEmail" style="font-size:14px;margin:0 4px 10px"></div>
+    <button class="btn ghost" id="logoutBtn" style="width:100%">ログアウト</button>
+  </div>
+  <div class="card" style="font-size:13px;color:var(--sub);line-height:1.7">
+    iPhone は Safari の共有ボタン →「ホーム画面に追加」で、アプリのように使えます。
+  </div>
+</section>
+
+<button class="fab hidden" id="fab" aria-label="追加">＋</button>
+<nav class="tabs">
+  <button data-tab="cal" class="on"><span class="i">📅</span>予定</button>
+  <button data-tab="money"><span class="i">💴</span>家計簿</button>
+  <button data-tab="set"><span class="i">⚙️</span>設定</button>
+</nav>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <h3><span id="shTitle">追加</span><button id="shClose" aria-label="閉じる">✕</button></h3>
+  <div class="seg" id="kindSeg">
+    <button data-kind="event" class="on">予定</button>
+    <button data-kind="out">支出</button>
+    <button data-kind="in">収入</button>
+  </div>
+  <div id="fEvent">
+    <label>タイトル</label><input id="eTitle" maxlength="60" placeholder="例: 実家に帰る">
+    <div class="row">
+      <div><label>日付</label><input id="eDate" type="date"></div>
+      <div><label>開始</label><input id="eTime" type="time"></div>
+      <div><label>終了</label><input id="eEnd" type="time"></div>
+    </div>
+    <label>だれの予定？</label>
+    <div class="seg" id="eWho"></div>
+    <label>メモ</label><textarea id="eMemo" maxlength="500"></textarea>
+  </div>
+  <div id="fMoney" style="display:none">
+    <label>金額（円）</label><input id="mAmount" class="amount" type="number" inputmode="numeric" min="0" placeholder="0">
+    <label>カテゴリ</label><div class="cats" id="mCats"></div>
+    <div class="row"><div><label>日付</label><input id="mDate" type="date"></div></div>
+    <label id="mPayLabel">払った人</label>
+    <div class="seg" id="mWho"></div>
+    <label>メモ</label><input id="mMemo" maxlength="100" placeholder="例: スーパー">
+  </div>
+  <div class="actions">
+    <button class="btn danger" id="shDel" style="display:none">削除</button>
+    <button class="btn" id="shSave">保存</button>
+  </div>
+  <div class="err" id="shErr"></div>
+</div>
+
+<script type="module">
+import { firebaseConfig, DEFAULT_NAMES } from "./config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const OUT_CATS=["食費","外食","日用品","住居","光熱費","通信","交通","車","娯楽","医療","衣服","交際","サッカー","その他"];
+const IN_CATS=["給料","副業","臨時","その他"];
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const yen=n=>"¥"+Math.round(n||0).toLocaleString("ja-JP");
+const DOW=["日","月","火","水","木","金","土"];
+let todayStr=ymd(new Date());
+
+const S={
+  month:new Date(new Date().getFullYear(),new Date().getMonth(),1),
+  sel:todayStr, tab:"cal", events:[], money:[], upcoming:[],
+  settings:{nameA:DEFAULT_NAMES.a,nameB:DEFAULT_NAMES.b,budget:0},
+};
+let canWrite=false, unsubMonth=[], unsubFixed=[], me=null;
+
+/* ---------- Firebase ---------- */
+const configured=firebaseConfig && firebaseConfig.apiKey && !/ここに/.test(firebaseConfig.apiKey);
+let auth=null, fs=null;
+if(configured){
+  const app=initializeApp(firebaseConfig);
+  auth=getAuth(app);
+  try{ fs=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})}); }
+  catch(e){ fs=initializeFirestore(app,{}); }
+}
+const col=name=>collection(fs,name);
+
+function nameOf(w){return w==="a"?S.settings.nameA:w==="b"?S.settings.nameB:"ふたり"}
+function colorOf(w){return w==="a"?"var(--a)":w==="b"?"var(--b)":"var(--both)"}
+function notice(msg){const n=$("notice");n.textContent=msg||"";n.style.display=msg?"block":"none"}
+function clean(snap){return snap.docs.map(d=>Object.assign({id:d.id},d.data()))}
+function fmtDate(s){const d=new Date(s+"T00:00:00");return (d.getMonth()+1)+"/"+d.getDate()+"（"+DOW[d.getDay()]+"）"}
+
+/* ---------- render ---------- */
+function render(){
+  const y=S.month.getFullYear(), m=S.month.getMonth();
+  $("mlabel").textContent=y+"年"+(m+1)+"月";
+  renderCal(); renderDay(); renderUpcoming(); renderMoney();
+}
+function renderCal(){
+  const g=$("grid"); g.innerHTML="";
+  DOW.forEach(d=>{const e=document.createElement("div");e.className="dow";e.textContent=d;g.appendChild(e)});
+  const y=S.month.getFullYear(), m=S.month.getMonth();
+  const start=new Date(y,m,1-new Date(y,m,1).getDay());
+  const byDate={}, outBy={};
+  S.events.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e)});
+  S.money.forEach(x=>{if(x.kind==="out")outBy[x.date]=(outBy[x.date]||0)+(+x.amount||0)});
+  for(let i=0;i<42;i++){
+    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
+    if(i>=35 && d.getMonth()!==m) break;
+    const s=ymd(d), c=document.createElement("div");
+    c.className="day"+(d.getMonth()!==m?" other":"")+(s===todayStr?" today":"")+(s===S.sel?" sel":"")+(d.getDay()===0?" sun":d.getDay()===6?" sat":"");
+    const n=document.createElement("div");n.className="n";n.textContent=d.getDate();c.appendChild(n);
+    const dots=document.createElement("div");dots.className="dots";
+    (byDate[s]||[]).slice(0,4).forEach(e=>{const t=document.createElement("i");t.className="dot";t.style.background=colorOf(e.who);dots.appendChild(t)});
+    c.appendChild(dots);
+    if(outBy[s]){const yy=document.createElement("div");yy.className="yen";const v=outBy[s];yy.textContent=v>=1000?(Math.round(v/100)/10)+"k":String(v);c.appendChild(yy)}
+    c.onclick=()=>{S.sel=s; if(d.getMonth()!==m){S.month=new Date(d.getFullYear(),d.getMonth(),1);subscribeMonth()} render()};
+    g.appendChild(c);
+  }
+  const lg=$("legend");lg.innerHTML="";
+  ["a","b","both"].forEach(w=>{const s=document.createElement("span");const i=document.createElement("i");i.className="dot";i.style.background=colorOf(w);s.appendChild(i);s.appendChild(document.createTextNode(nameOf(w)));lg.appendChild(s)});
+}
+function eventItem(e,showDate){
+  const it=document.createElement("div");it.className="item";
+  const bar=document.createElement("div");bar.className="bar";bar.style.background=colorOf(e.who);
+  const t=document.createElement("div");t.className="t";
+  const b=document.createElement("b");b.textContent=e.title||"（無題）";
+  const sm=document.createElement("small");
+  sm.textContent=[showDate?fmtDate(e.date):"", e.time?(e.time+(e.end?"〜"+e.end:"")):"終日", e.memo||""].filter(Boolean).join("  ");
+  t.append(b,sm);
+  const tag=document.createElement("span");tag.className="tag";tag.style.background=colorOf(e.who);tag.textContent=nameOf(e.who);
+  it.append(bar,t,tag);
+  it.onclick=()=>openSheet("event",e);
+  return it;
+}
+function moneyItem(x,showDate){
+  const it=document.createElement("div");it.className="item";
+  const bar=document.createElement("div");bar.className="bar";bar.style.background=x.kind==="in"?"var(--in)":"var(--out)";
+  const t=document.createElement("div");t.className="t";
+  const b=document.createElement("b");b.textContent=x.category+(x.memo?"・"+x.memo:"");
+  const sm=document.createElement("small");sm.textContent=(showDate?fmtDate(x.date)+"  ":"")+(x.who==="both"?"共通口座":nameOf(x.who))+(x.kind==="in"?"の収入":"が支払い");
+  t.append(b,sm);
+  const a=document.createElement("span");a.className="amt "+(x.kind==="in"?"in":"out");a.textContent=(x.kind==="in"?"+":"−")+yen(x.amount);
+  it.append(bar,t,a);
+  it.onclick=()=>openSheet(x.kind,x);
+  return it;
+}
+function sortEv(a,b){return (a.date+(a.time||"")).localeCompare(b.date+(b.time||""))}
+function renderDay(){
+  $("dayTitle").textContent=fmtDate(S.sel);
+  const box=$("dayList");box.innerHTML="";
+  const ev=S.events.filter(e=>e.date===S.sel).sort(sortEv);
+  const mo=S.money.filter(x=>x.date===S.sel);
+  ev.forEach(e=>box.appendChild(eventItem(e,false)));
+  mo.forEach(x=>box.appendChild(moneyItem(x,false)));
+  if(!ev.length&&!mo.length){box.innerHTML='<div class="empty">この日の予定・記録はありません</div>'}
+  $("addHere").style.display=canWrite?"":"none";
+}
+function renderUpcoming(){
+  const box=$("upcoming");box.innerHTML="";
+  const list=S.upcoming.filter(e=>e.date>=todayStr).sort(sortEv).slice(0,10);
+  if(!list.length){box.innerHTML='<div class="empty">予定はまだありません。＋から追加できます</div>';return}
+  list.forEach(e=>box.appendChild(eventItem(e,true)));
+}
+function brow(label,v,max,color){
+  const r=document.createElement("div");r.className="brow";
+  const l=document.createElement("span");l.className="l";l.textContent=label;
+  const tr=document.createElement("span");tr.className="track";const i=document.createElement("i");i.style.width=(max?v/max*100:0)+"%";if(color)i.style.background=color;tr.appendChild(i);
+  const vv=document.createElement("span");vv.className="v";vv.textContent=yen(v);r.append(l,tr,vv);return r;
+}
+function renderMoney(){
+  const out=S.money.filter(x=>x.kind==="out"), inc=S.money.filter(x=>x.kind==="in");
+  const tOut=out.reduce((s,x)=>s+(+x.amount||0),0), tIn=inc.reduce((s,x)=>s+(+x.amount||0),0);
+  $("sOut").textContent=yen(tOut);$("sIn").textContent=yen(tIn);
+  const bal=$("sBal");bal.textContent=(tIn-tOut<0?"−":"")+yen(Math.abs(tIn-tOut));bal.style.color=tIn-tOut<0?"var(--out)":"var(--in)";
+  const bb=$("budgetBox");bb.innerHTML="";
+  const bud=+S.settings.budget||0;
+  if(bud>0){
+    const left=bud-tOut, pct=Math.min(100,tOut/bud*100);
+    const p=document.createElement("div");p.className="prog";const i=document.createElement("i");i.style.width=pct+"%";if(pct>=90)i.style.background="var(--out)";p.appendChild(i);
+    const s=document.createElement("div");s.style.cssText="font-size:12px;color:var(--sub);margin-top:6px;text-align:right";
+    s.textContent="予算 "+yen(bud)+" ／ "+(left>=0?"残り "+yen(left):yen(-left)+" オーバー");
+    bb.append(p,s);
+  }
+  const cb=$("cats");cb.innerHTML="";
+  const byCat={};out.forEach(x=>byCat[x.category]=(byCat[x.category]||0)+(+x.amount||0));
+  const arr=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const max=arr.length?arr[0][1]:1;
+  if(!arr.length)cb.innerHTML='<div class="empty">今月の支出はまだありません</div>';
+  arr.forEach(([k,v])=>cb.appendChild(brow(k,v,max)));
+  const pb=$("payers");pb.innerHTML="";
+  const byW={a:0,b:0,both:0};out.forEach(x=>byW[x.who]=(byW[x.who]||0)+(+x.amount||0));
+  const pm=Math.max(byW.a,byW.b,byW.both,1);
+  ["a","b","both"].forEach(w=>pb.appendChild(brow(w==="both"?"共通口座":nameOf(w),byW[w],pm,colorOf(w))));
+  const diff=byW.a-byW.b;
+  if(byW.a+byW.b>0){const s=document.createElement("div");s.style.cssText="font-size:12px;color:var(--sub);margin:8px 4px 0";
+    s.textContent=diff===0?"ふたりの支払いはちょうど同じです":"半分ずつにするなら："+(diff>0?S.settings.nameB+" → "+S.settings.nameA:S.settings.nameA+" → "+S.settings.nameB)+" に "+yen(Math.abs(diff)/2);
+    pb.appendChild(s)}
+  const ml=$("mList");ml.innerHTML="";
+  const all=S.money.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  if(!all.length)ml.innerHTML='<div class="empty">＋から支出・収入を記録できます</div>';
+  all.forEach(x=>ml.appendChild(moneyItem(x,true)));
+}
+
+/* ---------- tabs / month ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{
+  S.tab=b.dataset.tab;
+  document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+S.tab));
+  $("fab").classList.toggle("hidden",S.tab==="set"||!canWrite);
+  document.querySelector(".mnav").style.visibility=S.tab==="set"?"hidden":"visible";
+  if(S.tab==="set"){$("setA").value=S.settings.nameA;$("setB").value=S.settings.nameB;$("setBudget").value=S.settings.budget||""}
+});
+$("prev").onclick=()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()-1,1);S.sel=ymd(S.month);subscribeMonth();render()};
+$("next").onclick=()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()+1,1);S.sel=ymd(S.month);subscribeMonth();render()};
+
+/* ---------- add / edit sheet ---------- */
+let editing=null, kind="event", who="both", cat=OUT_CATS[0], delArmed=false;
+function segButtons(box,opts,cur,on){box.innerHTML="";opts.forEach(([v,l])=>{const b=document.createElement("button");b.type="button";b.textContent=l;if(v===cur)b.classList.add("on");b.onclick=()=>{on(v);[...box.children].forEach(c=>c.classList.toggle("on",c===b))};box.appendChild(b)})}
+function drawKind(){
+  [...$("kindSeg").children].forEach(b=>b.classList.toggle("on",b.dataset.kind===kind));
+  $("fEvent").style.display=kind==="event"?"":"none";
+  $("fMoney").style.display=kind==="event"?"none":"";
+  const whoOpts=[["a",S.settings.nameA],["b",S.settings.nameB],["both",kind==="event"?"ふたり":"共通口座"]];
+  segButtons($("eWho"),whoOpts,who,v=>who=v);
+  segButtons($("mWho"),whoOpts,who,v=>who=v);
+  $("mPayLabel").textContent=kind==="in"?"だれの収入？":"払った人";
+  const cats=kind==="in"?IN_CATS:OUT_CATS; if(!cats.includes(cat))cat=cats[0];
+  const cb=$("mCats");cb.innerHTML="";
+  cats.forEach(c=>{const b=document.createElement("button");b.type="button";b.textContent=c;if(c===cat)b.classList.add("on");b.onclick=()=>{cat=c;[...cb.children].forEach(x=>x.classList.toggle("on",x===b))};cb.appendChild(b)});
+}
+[...$("kindSeg").children].forEach(b=>b.onclick=()=>{if(editing)return;kind=b.dataset.kind;if(kind!=="event"&&who==="both")who="a";drawKind()});
+function openSheet(k,item){
+  if(!canWrite) return;
+  editing=item||null; kind=k; delArmed=false; $("shErr").textContent="";
+  $("shTitle").textContent=item?"編集":"追加";
+  $("kindSeg").style.display=item?"none":"";
+  const date=item?item.date:S.sel;
+  $("eDate").value=date;$("mDate").value=date;
+  if(k==="event"){
+    $("eTitle").value=item?item.title||"":"";$("eTime").value=item?item.time||"":"";$("eEnd").value=item?item.end||"":"";$("eMemo").value=item?item.memo||"":"";
+    who=item?item.who:"both";
+  }else{
+    $("mAmount").value=item?item.amount:"";$("mMemo").value=item?item.memo||"":"";
+    who=item?item.who:"a"; cat=item?item.category:(k==="in"?IN_CATS[0]:OUT_CATS[0]);
+  }
+  if(!item){$("eTitle").value="";$("eTime").value="";$("eEnd").value="";$("eMemo").value="";$("mAmount").value="";$("mMemo").value=""}
+  drawKind();
+  const del=$("shDel");del.style.display=item?"":"none";del.textContent="削除";del.classList.remove("arm");
+  $("mask").style.display="block";requestAnimationFrame(()=>$("sheet").classList.add("on"));
+}
+function closeSheet(){$("sheet").classList.remove("on");setTimeout(()=>{$("mask").style.display="none"},200)}
+$("shClose").onclick=closeSheet;$("mask").onclick=closeSheet;
+$("fab").onclick=()=>openSheet(S.tab==="money"?"out":"event");
+$("addHere").onclick=()=>openSheet("event");
+
+function errText(e){
+  const c=e&&e.code||"";
+  if(c.includes("permission-denied"))return "このアカウントには書き込み権限がありません";
+  if(c.includes("unavailable"))return "電波が不安定です。つながると自動で保存されます";
+  return "保存できませんでした（"+(c||"エラー")+"）";
+}
+// Firestoreはオフラインでも書き込みをキャッシュし、つながると送信するので、完了を待たずに閉じる
+function fireWrite(p,errBox){p.catch(e=>{notice(errText(e))})}
+
+$("shSave").onclick=()=>{
+  let name,data;
+  if(kind==="event"){
+    const title=$("eTitle").value.trim(), date=$("eDate").value;
+    if(!title){$("shErr").textContent="タイトルを入れてください";return}
+    if(!date){$("shErr").textContent="日付を選んでください";return}
+    name="events";data={title,date,time:$("eTime").value||"",end:$("eEnd").value||"",who,memo:$("eMemo").value.trim()};
+  }else{
+    const amount=Math.round(+$("mAmount").value), date=$("mDate").value;
+    if(!(amount>0)){$("shErr").textContent="金額を入れてください";return}
+    if(!date){$("shErr").textContent="日付を選んでください";return}
+    name="money";data={kind,amount,category:cat,date,who,memo:$("mMemo").value.trim()};
+  }
+  data.updatedAt=Date.now();
+  data.createdAt=editing&&editing.createdAt?editing.createdAt:Date.now();
+  data.by=me?me.uid:"";
+  const ref=editing?doc(fs,name,editing.id):doc(col(name));
+  fireWrite(setDoc(ref,data));
+  if(data.date.slice(0,7)!==ymd(S.month).slice(0,7)){S.month=new Date(+data.date.slice(0,4),+data.date.slice(5,7)-1,1);subscribeMonth()}
+  S.sel=data.date; closeSheet(); render();
+};
+$("shDel").onclick=()=>{
+  const b=$("shDel");
+  if(!delArmed){delArmed=true;b.textContent="本当に削除";b.classList.add("arm");return}
+  fireWrite(deleteDoc(doc(fs,kind==="event"?"events":"money",editing.id)));closeSheet();
+};
+
+/* ---------- settings ---------- */
+$("saveSet").onclick=async()=>{
+  const d={nameA:$("setA").value.trim()||"ひとり目",nameB:$("setB").value.trim()||"ふたり目",budget:Math.max(0,Math.round(+$("setBudget").value||0))};
+  $("saveSet").disabled=true;
+  try{await setDoc(doc(fs,"settings","main"),d);$("setErr").style.color="var(--in)";$("setErr").textContent="保存しました"}
+  catch(e){$("setErr").style.color="";$("setErr").textContent=errText(e)}
+  finally{$("saveSet").disabled=false}
+};
+
+/* ---------- data ---------- */
+function onErr(e){
+  if(e&&e.code==="permission-denied"){denied();return}
+  notice("データを読み込めませんでした。ページを開き直してください。");
+}
+function subscribeMonth(){
+  if(!fs||!me)return;
+  unsubMonth.forEach(u=>u());unsubMonth=[];
+  const y=S.month.getFullYear(),m=S.month.getMonth();
+  const from=ymd(new Date(y,m,-6)), to=ymd(new Date(y,m+1,13));
+  S.events=[];S.money=[];
+  unsubMonth.push(onSnapshot(query(col("events"),where("date",">=",from),where("date","<=",to)),s=>{S.events=clean(s);render()},onErr));
+  unsubMonth.push(onSnapshot(query(col("money"),where("date",">=",ymd(new Date(y,m,1))),where("date","<=",ymd(new Date(y,m+1,0)))),s=>{S.money=clean(s);render()},onErr));
+}
+function subscribeFixed(){
+  unsubFixed.forEach(u=>u());unsubFixed=[];
+  unsubFixed.push(onSnapshot(doc(fs,"settings","main"),s=>{
+    if(s.exists()){const d=s.data();S.settings={nameA:d.nameA||DEFAULT_NAMES.a,nameB:d.nameB||DEFAULT_NAMES.b,budget:+d.budget||0}}
+    setWritable(true);render();
+  },onErr));
+  unsubFixed.push(onSnapshot(query(col("events"),where("date",">=",todayStr),orderBy("date"),limit(30)),s=>{S.upcoming=clean(s);render()},onErr));
+}
+function setWritable(on){
+  canWrite=on;document.body.classList.toggle("ro",!on);
+  $("fab").classList.toggle("hidden",!on||S.tab==="set");
+}
+function stopAll(){unsubMonth.forEach(u=>u());unsubFixed.forEach(u=>u());unsubMonth=[];unsubFixed=[];S.events=[];S.money=[];S.upcoming=[]}
+function denied(){
+  stopAll();setWritable(false);
+  $("login").classList.remove("hidden");
+  $("loginMsg").textContent=(me&&me.email?me.email+" は":"このアカウントは")+"ふたりノートに登録されていません。登録したGoogleアカウントでログインしてください。";
+  $("loginBtn").classList.add("hidden");$("logoutBtn2").classList.remove("hidden");
+}
+
+/* ---------- auth ---------- */
+async function login(){
+  $("loginMsg").textContent="";
+  const p=new GoogleAuthProvider();p.setCustomParameters({prompt:"select_account"});
+  try{await signInWithPopup(auth,p)}
+  catch(e){
+    if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment")){await signInWithRedirect(auth,p);return}
+    if(e&&e.code==="auth/popup-closed-by-user")return;
+    $("loginMsg").textContent="ログインできませんでした（"+(e&&e.code||"エラー")+"）";
+  }
+}
+$("loginBtn").onclick=login;
+$("logoutBtn").onclick=()=>signOut(auth);
+$("logoutBtn2").onclick=async()=>{await signOut(auth);login()};
+
+// 日付が変わったら「今日」を更新
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){const t=ymd(new Date());if(t!==todayStr){todayStr=t;if(me){subscribeFixed()}render()}}});
+
+render();
+if(!configured){
+  $("loginBtn").classList.add("hidden");
+  $("loginMsg").textContent="config.js にFirebaseの設定がまだ入っていません。README の手順で設定してください。";
+}else{
+  getRedirectResult(auth).catch(e=>{$("loginMsg").textContent="ログインできませんでした（"+(e&&e.code||"エラー")+"）"});
+  onAuthStateChanged(auth,u=>{
+    me=u;
+    if(!u){stopAll();setWritable(false);$("login").classList.remove("hidden");$("loginBtn").classList.remove("hidden");$("logoutBtn2").classList.add("hidden");render();return}
+    $("login").classList.add("hidden");
+    $("meEmail").textContent=u.email||"";
+    subscribeFixed();subscribeMonth();render();
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ふたりのGoogleアカウントだけが読み書きできる（メールアドレスを書き換えてください）
+    function isMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'keiya@example.com',
+          'nagi@example.com'
+        ];
+    }
+
+    match /events/{id}   { allow read, write: if isMember(); }
+    match /money/{id}    { allow read, write: if isMember(); }
+    match /settings/{id} { allow read, write: if isMember(); }
+  }
+}
