@@ -82,7 +82,13 @@ nav.tabs button.on{color:var(--ink);font-weight:700}
 label{display:block;font-size:12px;color:var(--sub);margin:10px 2px 4px}
 input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink)}
 textarea{min-height:60px;resize:vertical}
-.row{display:flex;gap:8px}.row>*{flex:1}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-width:0;width:100%;text-align:left;min-height:44px}
+.span{height:4px;margin:3px -3px 0;}
+.span.s{margin-left:3px;border-top-left-radius:3px;border-bottom-left-radius:3px}
+.span.e{margin-right:3px;border-top-right-radius:3px;border-bottom-right-radius:3px}
+.allday{display:flex;align-items:center;gap:8px;font-size:14px;margin:10px 2px 0}
+.allday input{width:20px;height:20px;margin:0}
 .amount{font-size:26px;font-weight:700;text-align:right}
 .cats{display:flex;flex-wrap:wrap;gap:6px}
 .cats button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13px}
@@ -217,10 +223,14 @@ textarea{min-height:60px;resize:vertical}
   <div id="fEvent">
     <label>タイトル</label><input id="eTitle" maxlength="60" placeholder="例: 実家に帰る">
     <div class="row">
-      <div><label>日付</label><input id="eDate" type="date"></div>
-      <div><label>開始</label><input id="eTime" type="time"></div>
-      <div><label>終了</label><input id="eEnd" type="time"></div>
+      <div><label>開始日</label><input id="eDate" type="date"></div>
+      <div class="tm"><label>開始時刻</label><input id="eTime" type="time"></div>
     </div>
+    <div class="row">
+      <div><label>終了日</label><input id="eEndDate" type="date"></div>
+      <div class="tm"><label>終了時刻</label><input id="eEnd" type="time"></div>
+    </div>
+    <label class="allday"><input type="checkbox" id="eAllDay">終日（時刻なし）</label>
     <label>だれの予定？</label>
     <div class="seg" id="eWho"></div>
     <label>メモ</label><textarea id="eMemo" maxlength="500"></textarea>
@@ -291,7 +301,8 @@ function renderCal(){
   const y=S.month.getFullYear(), m=S.month.getMonth();
   const start=new Date(y,m,1-new Date(y,m,1).getDay());
   const byDate={}, outBy={};
-  S.events.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e)});
+  const multi=S.events.filter(e=>endOf(e)>e.date).sort(sortEv);
+  S.events.filter(e=>endOf(e)===e.date).forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e)});
   S.money.forEach(x=>{if(x.kind==="out")outBy[x.date]=(outBy[x.date]||0)+(+x.amount||0)});
   for(let i=0;i<42;i++){
     const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
@@ -299,6 +310,7 @@ function renderCal(){
     const s=ymd(d), c=document.createElement("div");
     c.className="day"+(d.getMonth()!==m?" other":"")+(s===todayStr?" today":"")+(s===S.sel?" sel":"")+(d.getDay()===0?" sun":d.getDay()===6?" sat":"");
     const n=document.createElement("div");n.className="n";n.textContent=d.getDate();c.appendChild(n);
+    multi.filter(e=>covers(e,s)).slice(0,3).forEach(e=>{const sp=document.createElement("div");sp.className="span"+(e.date===s||d.getDay()===0?" s":"")+(endOf(e)===s||d.getDay()===6?" e":"");sp.style.background=colorOf(e.who);c.appendChild(sp)});
     const dots=document.createElement("div");dots.className="dots";
     (byDate[s]||[]).slice(0,4).forEach(e=>{const t=document.createElement("i");t.className="dot";t.style.background=colorOf(e.who);dots.appendChild(t)});
     c.appendChild(dots);
@@ -315,7 +327,11 @@ function eventItem(e,showDate){
   const t=document.createElement("div");t.className="t";
   const b=document.createElement("b");b.textContent=e.title||"（無題）";
   const sm=document.createElement("small");
-  sm.textContent=[showDate?fmtDate(e.date):"", e.time?(e.time+(e.end?"〜"+e.end:"")):"終日", e.memo||""].filter(Boolean).join("  ");
+  const ed=endOf(e);
+  let when;
+  if(ed>e.date){ when=fmtDate(e.date)+(e.time?" "+e.time:"")+" 〜 "+fmtDate(ed)+(e.end?" "+e.end:""); }
+  else{ when=(showDate?fmtDate(e.date)+"  ":"")+(e.time?(e.time+(e.end?"〜"+e.end:"")):"終日"); }
+  sm.textContent=[when, e.memo||""].filter(Boolean).join("  ");
   t.append(b,sm);
   const tag=document.createElement("span");tag.className="tag";tag.style.background=colorOf(e.who);tag.textContent=nameOf(e.who);
   it.append(bar,t,tag);
@@ -334,11 +350,13 @@ function moneyItem(x,showDate){
   it.onclick=()=>openSheet(x.kind,x);
   return it;
 }
+function endOf(e){return e.endDate&&e.endDate>=e.date?e.endDate:e.date}
+function covers(e,d){return e.date<=d&&endOf(e)>=d}
 function sortEv(a,b){return (a.date+(a.time||"")).localeCompare(b.date+(b.time||""))}
 function renderDay(){
   $("dayTitle").textContent=fmtDate(S.sel);
   const box=$("dayList");box.innerHTML="";
-  const ev=S.events.filter(e=>e.date===S.sel).sort(sortEv);
+  const ev=S.events.filter(e=>covers(e,S.sel)).sort(sortEv);
   const mo=S.money.filter(x=>x.date===S.sel);
   ev.forEach(e=>box.appendChild(eventItem(e,false)));
   mo.forEach(x=>box.appendChild(moneyItem(x,false)));
@@ -347,7 +365,7 @@ function renderDay(){
 }
 function renderUpcoming(){
   const box=$("upcoming");box.innerHTML="";
-  const list=S.upcoming.filter(e=>e.date>=todayStr).sort(sortEv).slice(0,10);
+  const list=S.upcoming.filter(e=>endOf(e)>=todayStr).sort(sortEv).slice(0,10);
   if(!list.length){box.innerHTML='<div class="empty">予定はまだありません。＋から追加できます</div>';return}
   list.forEach(e=>box.appendChild(eventItem(e,true)));
 }
@@ -427,6 +445,8 @@ function openSheet(k,item){
   $("eDate").value=date;$("mDate").value=date;
   if(k==="event"){
     $("eTitle").value=item?item.title||"":"";$("eTime").value=item?item.time||"":"";$("eEnd").value=item?item.end||"":"";$("eMemo").value=item?item.memo||"":"";
+    $("eEndDate").value=item?endOf(item):date;
+    $("eAllDay").checked=item?!(item.time||item.end):false;drawAllDay();
     who=item?item.who:"both";
   }else{
     $("mAmount").value=item?item.amount:"";$("mMemo").value=item?item.memo||"":"";
@@ -451,13 +471,22 @@ function errText(e){
 // Firestoreはオフラインでも書き込みをキャッシュし、つながると送信するので、完了を待たずに閉じる
 function fireWrite(p,errBox){p.catch(e=>{notice(errText(e))})}
 
+function drawAllDay(){const on=$("eAllDay").checked;document.querySelectorAll("#fEvent .tm").forEach(x=>x.style.display=on?"none":"")}
+$("eAllDay").onchange=drawAllDay;
+$("eDate").addEventListener("change",()=>{const a=$("eDate").value,b=$("eEndDate").value;if(a&&(!b||b<a))$("eEndDate").value=a});
 $("shSave").onclick=()=>{
   let name,data;
   if(kind==="event"){
     const title=$("eTitle").value.trim(), date=$("eDate").value;
     if(!title){$("shErr").textContent="タイトルを入れてください";return}
     if(!date){$("shErr").textContent="日付を選んでください";return}
-    name="events";data={title,date,time:$("eTime").value||"",end:$("eEnd").value||"",who,memo:$("eMemo").value.trim()};
+    let endDate=$("eEndDate").value||date;
+    if(endDate<date){$("shErr").textContent="終了日が開始日より前になっています";return}
+    if((Date.parse(endDate)-Date.parse(date))/864e5>60){$("shErr").textContent="60日より長い予定は入れられません";return}
+    const allDay=$("eAllDay").checked;
+    const time=allDay?"":($("eTime").value||""), end=allDay?"":($("eEnd").value||"");
+    if(endDate===date&&time&&end&&end<time){$("shErr").textContent="終了時刻が開始時刻より前になっています";return}
+    name="events";data={title,date,endDate,time,end,who,memo:$("eMemo").value.trim()};
   }else{
     const amount=Math.round(+$("mAmount").value), date=$("mDate").value;
     if(!(amount>0)){$("shErr").textContent="金額を入れてください";return}
@@ -498,7 +527,9 @@ function subscribeMonth(){
   const y=S.month.getFullYear(),m=S.month.getMonth();
   const from=ymd(new Date(y,m,-6)), to=ymd(new Date(y,m+1,13));
   S.events=[];S.money=[];
-  unsubMonth.push(onSnapshot(query(col("events"),where("date",">=",from),where("date","<=",to)),s=>{S.events=clean(s);render()},onErr));
+  // 複数日の予定（最長60日）が前の月から続いている場合も拾うため、開始日を60日さかのぼって読む
+  const from60=ymd(new Date(y,m,-6-60));
+  unsubMonth.push(onSnapshot(query(col("events"),where("date",">=",from60),where("date","<=",to)),s=>{S.events=clean(s).filter(e=>endOf(e)>=from);render()},onErr));
   unsubMonth.push(onSnapshot(query(col("money"),where("date",">=",ymd(new Date(y,m,1))),where("date","<=",ymd(new Date(y,m+1,0)))),s=>{S.money=clean(s);render()},onErr));
 }
 function subscribeFixed(){
@@ -507,7 +538,8 @@ function subscribeFixed(){
     if(s.exists()){const d=s.data();S.settings={nameA:d.nameA||DEFAULT_NAMES.a,nameB:d.nameB||DEFAULT_NAMES.b,budget:+d.budget||0}}
     setWritable(true);render();
   },onErr));
-  unsubFixed.push(onSnapshot(query(col("events"),where("date",">=",todayStr),orderBy("date"),limit(30)),s=>{S.upcoming=clean(s);render()},onErr));
+  const back60=(()=>{const d=new Date(todayStr+"T00:00:00");d.setDate(d.getDate()-60);return ymd(d)})();
+  unsubFixed.push(onSnapshot(query(col("events"),where("date",">=",back60),orderBy("date"),limit(100)),s=>{S.upcoming=clean(s);render()},onErr));
 }
 function setWritable(on){
   canWrite=on;document.body.classList.toggle("ro",!on);
